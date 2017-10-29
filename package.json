@@ -1,0 +1,25 @@
+{
+  "name": "simple-sonoff-server",
+  "version": "1.0.0",
+  "description": "A simple SONOFF Cloud replacement.",
+  "main": "sonoff.server.js",
+  "dependencies": {
+    "fs": "^0.0.1-security",
+    "http": "^0.0.0",
+    "https": "^1.0.0",
+    "express": "^4.16.2",
+    "wifi-control": "^2.0.1",
+    "nodejs-websocket": "^1.7.1",
+    "request": "^2.83.0",
+    "url": "^0.11.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "sonoff"
+  ],
+  "author": "Michael Dopp",
+  "license": "ISC"
+}
