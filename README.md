@@ -18,6 +18,7 @@ The "server" is the device, which should stay in contact with the SONOFF devices
 "websocketPort" can be any port.
 But make sure, that your router is allowing communication between devices.
 
+```javascript
 {
     "router": {
         "SSID": "#############",
@@ -30,6 +31,7 @@ But make sure, that your router is allowing communication between devices.
         "websocketPort": 443
     }
 }
+```
 
 # Setup a new device
 Start sonoff.setupdevice.js on a computer you like. It will connect to the SONOFF device, so you will lose internet connection. When the scripts runs, you must long-click the black button on the device, and it will be configured to use the "server" as its cloud. Which now runs in your own network.
@@ -38,7 +40,7 @@ Start sonoff.setupdevice.js on a computer you like. It will connect to the SONOF
 Start sonoff.server.js 
 This Server keeps the connection to the sonoff devices, and must run permanently.
 
-/devices => list off all devices that are currently known to the server.
-/devices/:deviceId => shows the status of the device 
-/devices/:deviceId/on => turns the device "on" 
-/devices/:deviceId/off => turns the device "on" 
+> /devices => list off all devices that are currently known to the server.
+> /devices/:deviceId => shows the status of the device 
+> /devices/:deviceId/on => turns the device "on" 
+> /devices/:deviceId/off => turns the device "on" 
