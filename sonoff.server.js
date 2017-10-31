@@ -53,6 +53,7 @@ var express = require('express');
 var server = express();
 var bodyParser = require('body-parser')
 var https = require('https');
+var http = require('http');
 
 // Register body-parser
 server.use(bodyParser.json());
@@ -63,7 +64,12 @@ https.createServer({
     key: fs.readFileSync('./certs/66805011.key'),
     cert: fs.readFileSync('./certs/66805011.cert')
 }, server).listen(config.server.httpsPort, function () {
-    console.log('API Server Started On Port %d', config.server.httpsPort);
+    console.log('SONOFF API Server Started On Port %d', config.server.httpsPort);
+});
+
+// Create https server & run
+http.createServer(server).listen(config.server.httpPort, function () {
+    console.log('API Server Started On Port %d', config.server.httpPort);
 });
 
 // Register routes

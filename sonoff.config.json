@@ -6,7 +6,8 @@
     },
     "server": {
         "IP": "192.168.178.##",
-        "httpsPort": 80,
+        "httpPort": 1081,
+        "httpsPort": 1080,
         "websocketPort": 443
     }
 }
