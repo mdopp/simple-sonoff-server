@@ -7,4 +7,5 @@ ENV WEBSOCKET_PORT=9443
 WORKDIR simple-sonoff-server
 ADD ./ ./
 
+RUN npm install 
 CMD node sonoff.server.js
