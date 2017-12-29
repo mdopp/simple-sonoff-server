@@ -91,7 +91,7 @@ server.get('/devices/:deviceId/status', function (req, res) {
     if (!d) {
         res.status(404).send('Sonoff device ' + req.params.deviceId + ' not found');
     } else {
-        res.status(200).send(((d.state == 'ON') ? 1 : 0));
+        res.status(200).send(((d.state == 'on') ? 1 : 0));
     }
 });
 
