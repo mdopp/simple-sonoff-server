@@ -8,10 +8,14 @@ var WiFiControl = require('wifi-control');
 //config parameters for SONOFF
 var apSSID = "ITEAD-10";
 var apPWD = "12345678";
+var serverIP = "0.0.0.0"
 
-config = JSON.parse(fs.readFileSync('./sonoff.config.json'));
+var wifiSSID = process.env.WIFI_SSID
+var wifiPassword = process.env.WIFI_PASSWORD
+var httpsPort = process.env.HTTPS_PORT
 
-//  Initialize wifi-control package with verbose output 
+
+//  Initialize wifi-control package with verbose output
 WiFiControl.init({
     debug: true
 });
@@ -42,10 +46,10 @@ var _initDevice = () => {
             request.post('http://10.10.7.1/ap', {
                 json: true, body: {
                     "version": 4,
-                    "ssid": config.router.SSID,
-                    "password": config.router.password,
-                    "serverName": config.server.IP,
-                    "port": config.server.httpsPort
+                    "ssid": wifiSSID,
+                    "password": wifiPassword,
+                    "serverName": serverIP,
+                    "port": httpsPort
                 }
             }, (err, response, body) => {
                 if (!err && response.statusCode == 200) {
