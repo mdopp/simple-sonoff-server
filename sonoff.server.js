@@ -1,8 +1,11 @@
 var ws = require("nodejs-websocket");
 const fs = require('fs');
 
-//config for wlan
-config = JSON.parse(fs.readFileSync('./sonoff.config.json'));
+//load config from env vars
+var httpPort = process.env.HTTP_PORT
+var httpsPort = process.env.HTTPS_PORT
+var websocketPort = process.env.WEBSOCKET_PORT
+var serverIP = "0.0.0.0"
 
 //set initialized parameters
 var state = {
@@ -47,7 +50,7 @@ state.pushMessage = a => {
     device.conn.sendText(r);
 };
 
-// ----------- https server ------------------------
+// ----------- api server ------------------------
 // Import libraries
 var express = require('express');
 var server = express();
@@ -63,13 +66,13 @@ server.use(bodyParser.urlencoded({ extended: true }));
 https.createServer({
     key: fs.readFileSync('./certs/66805011.key'),
     cert: fs.readFileSync('./certs/66805011.cert')
-}, server).listen(config.server.httpsPort, function () {
-    console.log('SONOFF API Server Started On Port %d', config.server.httpsPort);
+}, server).listen(httpsPort, function () {
+    console.log('SONOFF Server Started On Port %d', httpsPort);
 });
 
 // Create https server & run
-http.createServer(server).listen(config.server.httpPort, function () {
-    console.log('API Server Started On Port %d', config.server.httpPort);
+http.createServer(server).listen(httpPort, function () {
+    console.log('API Server Started On Port %d', httpPort);
 });
 
 // Register routes
@@ -79,8 +82,8 @@ server.post('/dispatch/device', function (req, res) {
     res.json({
         "error": 0,
         "reason": "ok",
-        "IP": config.server.IP,
-        "port": config.server.websocketPort
+        "IP": serverIP,
+        "port": websocketPort
     });
 });
 
@@ -112,8 +115,9 @@ server.get('/devices', function (req, res) {
     console.log('GET | %s | %s ', req.method, req.url);
     res.json(state.knownDevices.map(x => { return { id: x.id, state: x.state, model: x.model, kind: x.kind, version: x.version } }));
 });
-// ----------- https server ------------------------
 
+
+// ----------- sonoff server ------------------------
 // setup a server, that will respond to the SONOFF requests
 // this is the replacement for the SONOFF cloud!
 var wsOptions = {
@@ -123,7 +127,8 @@ var wsOptions = {
 };
 
 ws.createServer(wsOptions, function (conn) {
-    console.log("WS | Server is up %s:%s to %s:%s", config.server.IP, config.server.websocketPort, conn.socket.remoteAddress, conn.socket.remotePort);
+    console.log("WS | Server is up %s:%s to %s:%s", serverIP, websocketPort, conn.socket.remoteAddress, conn.socket.remotePort);
+
     conn.on("text", function (str) {
         var data = JSON.parse(str);
         console.log('REQ | WS | DEV | %s', JSON.stringify(data));
@@ -195,7 +200,7 @@ ws.createServer(wsOptions, function (conn) {
                     if (device.messages) {
                         var message = device.messages.find(item => item.sequence == data.sequence);
                         if (message) {
-                            device.messages = device.messages.filter(function(item) { 
+                            device.messages = device.messages.filter(function(item) {
                                 return item !== message;
                             })
                             device.state = message.params.switch;
@@ -219,4 +224,4 @@ ws.createServer(wsOptions, function (conn) {
     conn.on("close", function (code, reason) {
         console.log("Connection closed");
     });
-}).listen(config.server.websocketPort, config.server.IP);
+}).listen(websocketPort, serverIP);
