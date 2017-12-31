@@ -5,7 +5,7 @@ const fs = require('fs');
 var httpPort = process.env.HTTP_PORT
 var httpsPort = process.env.HTTPS_PORT
 var websocketPort = process.env.WEBSOCKET_PORT
-var serverIP = "0.0.0.0"
+var serverIP = process.env.SERVER_IP
 
 //set initialized parameters
 var state = {
