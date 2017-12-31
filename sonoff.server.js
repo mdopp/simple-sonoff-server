@@ -62,17 +62,24 @@ var http = require('http');
 server.use(bodyParser.json());
 server.use(bodyParser.urlencoded({ extended: true }));
 
-// Create https server & run
-https.createServer({
-    key: fs.readFileSync('./certs/66805011.key'),
-    cert: fs.readFileSync('./certs/66805011.cert')
-}, server).listen(httpsPort, function () {
-    console.log('SONOFF Server Started On Port %d', httpsPort);
+// Create http(s) server
+var privateKey  = fs.readFileSync('./certs/server.key');
+var certificate = fs.readFileSync('./certs/server.crt');
+var credentials = {
+  key: privateKey,
+  cert: certificate,
+  rejectUnauthorized:false
+};
+
+var httpServer = http.createServer(server)
+var httpsServer = https.createServer(credentials, server);
+
+httpServer.listen(httpPort, function () {
+    console.log('API Server Started On Port %d', httpPort);
 });
 
-// Create https server & run
-http.createServer(server).listen(httpPort, function () {
-    console.log('API Server Started On Port %d', httpPort);
+httpsServer.listen(httpsPort, function () {
+    console.log('SONOFF Server Started On Port %d', httpsPort);
 });
 
 // Register routes
@@ -122,8 +129,8 @@ server.get('/devices', function (req, res) {
 // this is the replacement for the SONOFF cloud!
 var wsOptions = {
     secure: true,
-    key: fs.readFileSync('./certs/66805011.key'),
-    cert: fs.readFileSync('./certs/66805011.cert'),
+    key: fs.readFileSync('./certs/server.key'),
+    cert: fs.readFileSync('./certs/server.crt'),
 };
 
 ws.createServer(wsOptions, function (conn) {
