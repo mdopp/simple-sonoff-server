@@ -231,4 +231,4 @@ ws.createServer(wsOptions, function (conn) {
     conn.on("close", function (code, reason) {
         console.log("Connection closed");
     });
-}).listen(websocketPort, serverIP);
+}).listen(websocketPort, '0.0.0.0');
