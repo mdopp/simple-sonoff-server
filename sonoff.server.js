@@ -84,6 +84,17 @@ server.post('/dispatch/device', function (req, res) {
     });
 });
 
+//returns an simple 0 or 1 for a known device via postman (https) <= does not work from browser!!
+server.get('/devices/:deviceId/status', function (req, res) {
+    console.log('GET | %s | %s ', req.method, req.url);
+    var d = state.getDeviceById(req.params.deviceId);
+    if (!d) {
+        res.status(404).send('Sonoff device ' + req.params.deviceId + ' not found');
+    } else {
+        res.status(200).send(((d.state == 'on') ? '1' : '0'));
+    }
+});
+
 //switch the device via postman (https) <= does not work from browser!!
 server.get('/devices/:deviceId/:state', function (req, res) {
     console.log('GET | %s | %s ', req.method, req.url);
