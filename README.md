@@ -21,13 +21,13 @@ But make sure, that your router is allowing communication between devices.
 ```json
 {
     "router": {
-        "SSID": "#############",
-        "password": ""#############"
-        
+        "SSID": "##########",
+        "password": "###########"
     },
     "server": {
-        "IP": "192.168.178.##",
-        "httpsPort": 80,
+        "IP": "0.0.0.0",
+        "httpPort": 1081,
+        "httpsPort": 1080,
         "websocketPort": 443
     }
 }
