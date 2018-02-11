@@ -297,7 +297,7 @@ module.exports.createServer = function (config) {
         conn.on("error", function (error) {
             log.error("Connection error: ", error);
         });
-    }).listen(config.server.websocketPort, config.server.IP);
+    }).listen(config.server.websocketPort);
 
     return {
         getConnectedDevices: () => {
