@@ -1,5 +1,5 @@
 # Simple SONOFF Server
-Current State => Not finished yet, but works.
+Current State => Not finished yet, but works most of the time.
 
 A lot of this code is based on the findings in this blog
 http://blog.nanl.de/2017/05/sonota-flashing-itead-sonoff-devices-via-original-ota-mechanism/
@@ -9,6 +9,12 @@ https://blog.ipsumdomus.com/sonoff-switch-complete-hack-without-firmware-upgrade
 The idea was to have an Openhab Binding. And this is the concept implementation, that works good enough for me to start with. It can be used in combination with the HTTP Binding.
 
 # Configuration
+
+I suggest to use => https://github.com/saryn/node-red-contrib-sonoff-server
+It solves a lot of problems like taking care of starting/stoping the server or keeping it running.
+
+If you still want to use this directly:
+
 Change the sonoff.config.json to fit your environment.
 
 The "server" is the device, which should stay in contact with the SONOFF devices. In my case it was the Raspverry Pi, which also runs Openhab.
