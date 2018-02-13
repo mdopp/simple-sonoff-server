@@ -101,7 +101,6 @@ module.exports.createServer = function (config) {
     var server = express();
     var bodyParser = require('body-parser')
     var https = require('https');
-    var http = require('http');
 
     // Register body-parser
     server.use(bodyParser.json());
@@ -114,12 +113,7 @@ module.exports.createServer = function (config) {
         rejectUnauthorized: false
     };
 
-    var httpServer = http.createServer(server)
     var httpsServer = https.createServer(credentials, server);
-
-    httpServer.listen(config.server.httpPort, function () {
-        log.log('API Server Started On Port %d', config.server.httpPort);
-    });
 
     httpsServer.listen(config.server.httpsPort, function () {
         log.log('SONOFF Server Started On Port %d', config.server.httpsPort);
@@ -136,47 +130,6 @@ module.exports.createServer = function (config) {
             "port": config.server.websocketPort
         });
     });
-
-    //returns an simple 0 or 1 for a known device via postman (https) <= does not work from browser!!
-    server.get('/devices/:deviceId/status', function (req, res) {
-        console.log('GET | %s | %s ', req.method, req.url);
-        var d = state.getDeviceById(req.params.deviceId);
-        if (!d) {
-            res.status(404).send('Sonoff device ' + req.params.deviceId + ' not found');
-        } else {
-            res.status(200).send(((d.state == 'on') ? '1' : '0'));
-        }
-    });
-
-    //switch the device via postman (https) <= does not work from browser!!
-    server.get('/devices/:deviceId/:state', function (req, res) {
-        log.log('GET | %s | %s ', req.method, req.url);
-        var d = state.getDeviceById(req.params.deviceId);
-        if (!d) {
-            res.status(404).send('Sonoff device ' + req.params.deviceId + ' not found');
-        } else {
-            res.sendStatus(200);
-            state.pushMessage({ action: 'update', value: { switch: req.params.state }, target: d.id });
-        }
-    });
-
-    //get a list of known devices via postman (https) <= does not work from browser!!
-    server.get('/devices/:deviceId', function (req, res) {
-        log.log('GET | %s | %s ', req.method, req.url);
-        var d = state.getDeviceById(req.params.deviceId);
-        if (!d) {
-            res.status(404).send('Sonoff device ' + req.params.deviceId + ' not found');
-        } else {
-            res.json({ id: d.id, state: d.state, model: d.model, kind: d.kind, version: d.version });
-        }
-    });
-
-    //get a list of known devices via postman (https) <= does not work from browser!!
-    server.get('/devices', function (req, res) {
-        log.log('GET | %s | %s ', req.method, req.url);
-        res.json(state.knownDevices.map(x => { return { id: x.id, state: x.state, model: x.model, kind: x.kind, version: x.version } }));
-    });
-
 
     // ----------- sonoff server ------------------------
     // setup a server, that will respond to the SONOFF requests
@@ -229,6 +182,7 @@ module.exports.createServer = function (config) {
                         } else {
                             device.state = data.params.switch;
                             device.conn = conn;
+                            device.rawMessageLastUpdate = data;
                             state.updateKnownDevice(device);
                         }
 
@@ -247,6 +201,7 @@ module.exports.createServer = function (config) {
                         device.version = data.romVersion;
                         device.model = data.model;
                         device.conn = conn;
+                        device.rawMessageRegister = data;
                         addConnectionIsAliveCheck(device);
                         state.updateKnownDevice(device);
                         log.log('INFO | WS | Device %s registered', device.id);
@@ -291,7 +246,7 @@ module.exports.createServer = function (config) {
                 log.log("Device %s disconnected", device.id);
                 clearInterval(device.isAliveIntervalId);
                 callDeviceListeners(state.listeners.onDeviceDisconnectedListeners, device);
-                state.knownDevices.splice(index, 1);
+                device.conn = undefined;
             });
         });
         conn.on("error", function (error) {
@@ -300,28 +255,29 @@ module.exports.createServer = function (config) {
     }).listen(config.server.websocketPort);
 
     return {
+        //currently all known devices are returned with a hint if they are currently connected
         getConnectedDevices: () => {
             return state.knownDevices.map(x => {
-                return { id: x.id, state: x.state, model: x.model, kind: x.kind, version: x.version }
+                return { id: x.id, state: x.state, model: x.model, kind: x.kind, version: x.version, isConnected: (typeof x.conn !== 'undefined'), isAlive: x.isAlive, rawMessageRegister: x.rawMessageRegister, rawMessageLastUpdate: x.rawMessageLastUpdate }
             });
         },
 
         getDeviceState: (deviceId) => {
             var d = state.getDeviceById(deviceId);
-            if (!d) return "disconnected";
+            if (!d || (typeof d.conn == 'undefined')) return "disconnected";
             return d.state;
         },
 
         turnOnDevice: (deviceId) => {
             var d = state.getDeviceById(deviceId);
-            if (!d) return "disconnected";
+            if (!d || (typeof d.conn == 'undefined')) return "disconnected";
             state.pushMessage({ action: 'update', value: { switch: "on" }, target: deviceId });
             return "on";
         },
 
         turnOffDevice: (deviceId) => {
             var d = state.getDeviceById(deviceId);
-            if (!d) return "disconnected";
+            if (!d || (typeof d.conn == 'undefined')) return "disconnected";
             state.pushMessage({ action: 'update', value: { switch: "off" }, target: deviceId });
             return "off";
         },
@@ -341,7 +297,6 @@ module.exports.createServer = function (config) {
         close: () => {
             log.log("Stopping server");
             state.knownDevices.forEach(device => device.conn.close());
-            httpServer.close();
             httpsServer.close();
             wsServer.close();
             log.log("Stopped server");
