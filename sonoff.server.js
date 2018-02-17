@@ -12,6 +12,7 @@ config.logger = {
     log: console.log,
     warn: console.warn,
     error: console.error,
+    info: console.info,
     trace: console.trace,
     debug: console.debug,
 };
@@ -25,6 +26,8 @@ if (process.env.WEBSOCKET_PORT !== undefined)
 if (process.env.SERVER_IP !== undefined)
     config.server.IP = process.env.SERVER_IP;
 
+
+const log = config.logger;
 
 // call sonoff server for device handling 
 var devices = sonoffServer.createServer(config);
@@ -41,7 +44,7 @@ httpServer.listen(config.server.httpPort, function () {
 
 //returns an simple 0 or 1 for a known device
 server.get('/devices/:deviceId/status', function (req, res) {
-    console.log('GET | %s | %s ', req.method, req.url);
+    log.log('GET | %s | %s ', req.method, req.url);
 
     var d = devices.getDeviceState(req.params.deviceId);
 
