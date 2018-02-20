@@ -12,8 +12,7 @@ config.logger = {
     log: console.log,
     warn: console.warn,
     error: console.error,
-    info: console.info,
-    trace: console.trace,
+    trace: console.info,
     debug: console.debug,
 };
 

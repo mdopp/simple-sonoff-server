@@ -70,7 +70,7 @@ module.exports.createServer = function (config) {
             "from": "app"
         };
         var r = JSON.stringify(rq);
-        log.info('REQ | WS | APP | ' + r);
+        log.trace('REQ | WS | APP | ' + r);
         var device = state.getDeviceById(a.target);
         if (!device.messages) device.messages = [];
         device.messages.push(rq);
@@ -122,7 +122,7 @@ module.exports.createServer = function (config) {
     // Register routes
     server.post('/dispatch/device', function (req, res) {
         log.log('REQ | %s | %s ', req.method, req.url);
-        log.info('REQ | %s', JSON.stringify(req.body));
+        log.trace('REQ | %s', JSON.stringify(req.body));
         res.json({
             "error": 0,
             "reason": "ok",
@@ -145,7 +145,7 @@ module.exports.createServer = function (config) {
 
         conn.on("text", function (str) {
             var data = JSON.parse(str);
-            log.info('REQ | WS | DEV | %s', JSON.stringify(data));
+            log.trace('REQ | WS | DEV | %s', JSON.stringify(data));
             res = {
                 "error": 0,
                 "deviceid": data.deviceid,
@@ -183,6 +183,7 @@ module.exports.createServer = function (config) {
                             device.state = data.params.switch;
                             device.conn = conn;
                             device.rawMessageLastUpdate = data;
+                            device.rawMessageLastUpdate.timestamp = Date.now();
                             state.updateKnownDevice(device);
                         }
 
@@ -202,6 +203,7 @@ module.exports.createServer = function (config) {
                         device.model = data.model;
                         device.conn = conn;
                         device.rawMessageRegister = data;
+                        device.rawMessageRegister.timestamp = Date.now();
                         addConnectionIsAliveCheck(device);
                         state.updateKnownDevice(device);
                         log.log('INFO | WS | Device %s registered', device.id);
@@ -222,7 +224,7 @@ module.exports.createServer = function (config) {
                                 })
                                 device.state = message.params.switch;
                                 state.updateKnownDevice(device);
-                                log.info('INFO | WS | APP | action has been accnowlaged by the device ' + JSON.stringify(data));
+                                log.trace('INFO | WS | APP | action has been accnowlaged by the device ' + JSON.stringify(data));
                             } else {
                                 log.error('ERR | WS | No message send, but received an anser', JSON.stringify(data));
                             }
@@ -235,7 +237,7 @@ module.exports.createServer = function (config) {
                 }
             }
             var r = JSON.stringify(res);
-            log.info('RES | WS | DEV | ' + r);
+            log.trace('RES | WS | DEV | ' + r);
             conn.sendText(r);
         });
         conn.on("close", function (code, reason) {
