@@ -32,8 +32,8 @@ But make sure, that your router is allowing communication between devices.
     },
     "server": {
         "IP": "0.0.0.0",
-        "httpPort": 1081,
-        "httpsPort": 1080,
+        "httpPort": 1080,
+        "httpsPort": 1081,
         "websocketPort": 443
     }
 }
