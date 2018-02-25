@@ -50,7 +50,7 @@ server.get('/devices/:deviceId/status', function (req, res) {
     if (!d || d == "disconnected") {
         res.status(404).send('Sonoff device ' + req.params.deviceId + ' not found');
     } else {
-        res.status(200).send(((d.state == 'on') ? '1' : '0'));
+        res.status(200).send(((d == 'on') ? '1' : '0'));
     }
 });
 
@@ -83,11 +83,10 @@ server.get('/devices/:deviceId/:state', function (req, res) {
 server.get('/devices/:deviceId', function (req, res) {
     log.log('GET | %s | %s ', req.method, req.url);
     var d = devices.getDeviceState(req.params.deviceId);
-
     if (!d || d == "disconnected") {
         res.status(404).send('Sonoff device ' + req.params.deviceId + ' not found');
     } else {
-        res.json({ id: d.id, state: d.state, model: d.model, kind: d.kind, version: d.version });
+        res.json(devices.getConnectedDevices().find(d => d.id == req.params.deviceId));
     }
 });
 
