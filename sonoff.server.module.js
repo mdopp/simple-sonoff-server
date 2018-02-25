@@ -131,6 +131,12 @@ module.exports.createServer = function (config) {
         });
     });
 
+    // Register routes
+    server.get('/', function (req, res) {
+        log.log('REQ | %s | %s ', req.method, req.url);
+        res.send('OK');
+    });
+
     // ----------- sonoff server ------------------------
     // setup a server, that will respond to the SONOFF requests
     // this is the replacement for the SONOFF cloud!
