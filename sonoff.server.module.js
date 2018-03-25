@@ -27,6 +27,10 @@ module.exports.createServer = function (config) {
         return state.knownDevices.find(d => d.id == deviceId);
     };
 
+    state.getDeviceByParentId = (deviceId) => {
+        return state.knownDevices.find(d => d.parentId == deviceId);
+    };
+
     state.updateKnownDevice = (device) => {
         var updated = false;
 
@@ -71,7 +75,7 @@ module.exports.createServer = function (config) {
         };
         var r = JSON.stringify(rq);
         log.trace('REQ | WS | APP | ' + r);
-        var device = state.getDeviceById(a.target);
+        var device = state.getDeviceById(a.device);
         if (!device.messages) device.messages = [];
         device.messages.push(rq);
         device.conn.sendText(r);
@@ -166,53 +170,93 @@ module.exports.createServer = function (config) {
                         //device wants information
                         var device = state.getDeviceById(data.deviceid);
                         if (!device) {
-                            log.error('ERR | WS | Unknown device ', data.deviceid);
-                        } else {
-                            /*if(data.params.includes('timers')){
-                             log.log('INFO | WS | Device %s asks for timers',device.id);
-                             if(device.timers){
-                              res.params = [{timers : device.timers}];
-                             }
-                            }*/
-                            res.params = {};
-                            data.params.forEach(p => {
-                                res.params[p] = device[p];
-                            });
+                            device = state.getDeviceByParentId(data.deviceid);
+                            if (!device) {
+                                log.error('ERR | WS | Unknown device ', data.deviceid);
+                                break;
+                            }
                         }
+                        /*if(data.params.includes('timers')){
+                         log.log('INFO | WS | Device %s asks for timers',device.id);
+                         if(device.timers){
+                          res.params = [{timers : device.timers}];
+                         }
+                        }*/
+                        res.params = {};
+                        data.params.forEach(p => {
+                            res.params[p] = device[p];
+                        });
                         break;
                     case 'update':
                         //device wants to update its state
-                        var device = state.getDeviceById(data.deviceid);
-                        if (!device) {
-                            log.error('ERR | WS | Unknown device ', data.deviceid);
+                        if (typeof data.params.switches == 'undefined') {
+                            // Single switch
+                            var device = state.getDeviceById(data.deviceid);
+                            if (!device) {
+                                log.error('ERR | WS | Unknown device ', data.deviceid);
+                            } else {
+                                device.state = data.params.switch;
+                                device.conn = conn;
+                                device.rawMessageLastUpdate = data;
+                                device.rawMessageLastUpdate.timestamp = Date.now();
+                                state.updateKnownDevice(device);
+                            }
                         } else {
-                            device.state = data.params.switch;
-                            device.conn = conn;
-                            device.rawMessageLastUpdate = data;
-                            device.rawMessageLastUpdate.timestamp = Date.now();
-                            state.updateKnownDevice(device);
+                            // Multiple switches, look for parent
+                            var device = state.getDeviceByParentId(data.deviceid);
+                            if (!device) {
+                                log.error('ERR | WS | Unknown device ', data.deviceid);
+                            } else {
+                                for (i = 0; i < data.params.switches.length; i++) {
+                                    var device = state.getDeviceById(data.deviceid + '-' + i);
+                                    device.state = data.params.switches[i].switch;
+                                    device.conn = conn;
+                                    device.rawMessageLastUpdate = data;
+                                    device.rawMessageLastUpdate.timestamp = Date.now();
+                                    state.updateKnownDevice(device);
+                                }
+                            }
                         }
-
                         break;
                     case 'register':
-                        var device = {
-                            id: data.deviceid
-                        };
+                        if (data.model == 'PSF-B04-GL') {
+                            //register for devices appending the outlet to the deviceId
+                            for (i = 0; i < 4; i++) {
+                                var device = {
+                                    id: data.deviceid + '-' + i,
+                                    parentId: data.deviceid,
+                                    outlet: i
+                                };
+                                device.version = data.romVersion;
+                                device.model = data.model;
+                                device.conn = conn;
+                                device.rawMessageRegister = data;
+                                device.rawMessageRegister.timestamp = Date.now();
+                                state.updateKnownDevice(device);
+                                log.log('INFO | WS | Device %s registered', device.id);
+                            }
+                            //Keep alive only once
+                            addConnectionIsAliveCheck(device);
+                        } else {
+                            var device = {
+                                id: data.deviceid
+                            };
 
-                        //this is not valid anymore?! type is not based on the first two chars
-                        var type = data.deviceid.substr(0, 2);
-                        if (type == '01') device.kind = 'switch';
-                        else if (type == '02') device.kind = 'light';
-                        else if (type == '03') device.kind = 'sensor'; //temperature and humidity. No timers here;
+                            //this is not valid anymore?! type is not based on the first two chars
+                            var type = data.deviceid.substr(0, 2);
+                            if (type == '01') device.kind = 'switch';
+                            else if (type == '02') device.kind = 'light';
+                            else if (type == '03') device.kind = 'sensor'; //temperature and humidity. No timers here;
 
-                        device.version = data.romVersion;
-                        device.model = data.model;
-                        device.conn = conn;
-                        device.rawMessageRegister = data;
-                        device.rawMessageRegister.timestamp = Date.now();
-                        addConnectionIsAliveCheck(device);
-                        state.updateKnownDevice(device);
-                        log.log('INFO | WS | Device %s registered', device.id);
+                            device.version = data.romVersion;
+                            device.model = data.model;
+                            device.conn = conn;
+                            device.rawMessageRegister = data;
+                            device.rawMessageRegister.timestamp = Date.now();
+                            addConnectionIsAliveCheck(device);
+                            state.updateKnownDevice(device);
+                            log.log('INFO | WS | Device %s registered', device.id);
+                        }
                         break;
                     default: log.error('TODO | Unknown action "%s"', data.action); break;
                 }
@@ -220,7 +264,28 @@ module.exports.createServer = function (config) {
                 if (data.sequence && data.deviceid) {
                     var device = state.getDeviceById(data.deviceid);
                     if (!device) {
-                        log.error('ERR | WS | Unknown device ', data.deviceid);
+                        // Look for parent
+                        device = state.getDeviceByParentId(data.deviceid);
+                        if (!device) {
+                            log.error('ERR | WS | Unknown device ', data.deviceid);
+                        } else {
+                            // Look for message
+                            for (i = 0; i < 4; i++) {
+                                device = state.getDeviceById(data.deviceid + '-' + i);
+                                if (device.messages) {
+                                    var message = device.messages.find(item => item.sequence == data.sequence);
+                                    if (message) {
+                                        device.messages = device.messages.filter(function (item) {
+                                            return item !== message;
+                                        })
+                                        device.state = message.params.switches[0].switch;
+                                        state.updateKnownDevice(device);
+                                        log.trace('INFO | WS | APP | action has been accnowlaged by the device ' + JSON.stringify(data));
+                                        break;;
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         if (device.messages) {
                             var message = device.messages.find(item => item.sequence == data.sequence);
@@ -247,7 +312,7 @@ module.exports.createServer = function (config) {
             conn.sendText(r);
         });
         conn.on("close", function (code, reason) {
-            log.log("Connection closed: %s (%d)", reason, code);
+            log.log("Connection closed: '%s' (%d)", reason, code);
             state.knownDevices.forEach((device, index) => {
                 if (device.conn != conn)
                     return;
@@ -266,7 +331,7 @@ module.exports.createServer = function (config) {
         //currently all known devices are returned with a hint if they are currently connected
         getConnectedDevices: () => {
             return state.knownDevices.map(x => {
-                return { id: x.id, state: x.state, model: x.model, kind: x.kind, version: x.version, isConnected: (typeof x.conn !== 'undefined'), isAlive: x.isAlive, rawMessageRegister: x.rawMessageRegister, rawMessageLastUpdate: x.rawMessageLastUpdate }
+                return { id: x.id, state: x.state, parentId: x.parentId, outlet: x.outlet, model: x.model, kind: x.kind, version: x.version, isConnected: (typeof x.conn !== 'undefined'), isAlive: x.isAlive, rawMessageRegister: x.rawMessageRegister, rawMessageLastUpdate: x.rawMessageLastUpdate }
             });
         },
 
@@ -279,14 +344,26 @@ module.exports.createServer = function (config) {
         turnOnDevice: (deviceId) => {
             var d = state.getDeviceById(deviceId);
             if (!d || (typeof d.conn == 'undefined')) return "disconnected";
-            state.pushMessage({ action: 'update', value: { switch: "on" }, target: deviceId });
+
+            if (typeof d.outlet == 'undefined') {
+                state.pushMessage({ action: 'update', value: { switch: "on" }, target: deviceId, device: deviceId });
+            } else {
+                state.pushMessage({ action: 'update', value: { switches: [{ switch: "on", outlet: Number(d.outlet) }]}, target: d.parentId, device: deviceId });
+            }
+
             return "on";
         },
 
         turnOffDevice: (deviceId) => {
             var d = state.getDeviceById(deviceId);
             if (!d || (typeof d.conn == 'undefined')) return "disconnected";
-            state.pushMessage({ action: 'update', value: { switch: "off" }, target: deviceId });
+
+            if (typeof d.outlet == 'undefined') {
+                state.pushMessage({ action: 'update', value: { switch: "off" }, target: deviceId, device: deviceId });
+            } else {
+                state.pushMessage({ action: 'update', value: { switches: [{ switch: "off", outlet: Number(d.outlet) }]}, target: d.parentId, device: deviceId });
+            }
+
             return "off";
         },
 
