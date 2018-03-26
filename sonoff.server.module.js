@@ -312,7 +312,7 @@ module.exports.createServer = function (config) {
             conn.sendText(r);
         });
         conn.on("close", function (code, reason) {
-            log.log("Connection closed: '%s' (%d)", reason, code);
+            log.log("Connection closed: (%s) (%d)", reason, code);
             state.knownDevices.forEach((device, index) => {
                 if (device.conn != conn)
                     return;
