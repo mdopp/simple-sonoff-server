@@ -1,6 +1,6 @@
 module.exports.createServer = function (config) {
     const CONNECTION_IS_ALIVE_CHECK_INTERVAL = 30000;
-   
+
     const fs = require('fs');
     const path = require('path');
     const ws = require("nodejs-websocket");
@@ -15,6 +15,7 @@ module.exports.createServer = function (config) {
     //set initialized parameters
     var state = {
         knownDevices: [],
+        connections: [],
         listeners: {
             onDeviceConnectedListeners: [],
             onDeviceDisconnectedListeners: [],
@@ -78,24 +79,27 @@ module.exports.createServer = function (config) {
         var device = state.getDeviceById(a.device);
         if (!device.messages) device.messages = [];
         device.messages.push(rq);
-        device.conn.sendText(r);
+        device.connection.conn.sendText(r);
     };
 
-    function addConnectionIsAliveCheck(device) {
-        device.isAlive = true;
+    function addConnection(connection) {
+        var conn = connection.conn;
+        var connId = conn.socket.remoteAddress + ':'  + conn.socket.remotePort;
+        connection.isAlive = true;
+        state.connections[connId] = connection;
 
-        device.isAliveIntervalId = setInterval(() => {
-            if (device.conn.readyState == device.conn.CONNECTING) return;
-            if (!device.isAlive) {
-                clearInterval(device.isAliveIntervalId);
-                return device.conn.close(408, "connection timed out");
+        connection.isAliveIntervalId = setInterval(() => {
+            if (connection.conn.readyState == connection.conn.CONNECTING) return;
+            if (!connection.isAlive) {
+                clearInterval(connection.isAliveIntervalId);
+                return connection.conn.close(408, "connection timed out");
             }
-            device.isAlive = false;
-            device.conn.sendPing();
+            connection.isAlive = false;
+            conn.sendPing();
         }, CONNECTION_IS_ALIVE_CHECK_INTERVAL);
 
-        device.conn.on("pong", () => {
-            device.isAlive = true;
+        connection.conn.on("pong", () => {
+            connection.isAlive = true;
         });
     }
 
@@ -147,7 +151,7 @@ module.exports.createServer = function (config) {
     var wsOptions = {
         secure: true,
         key: config.server.privateKey,
-        cert: config.server.certificate
+        cert: config.server.certificate,
     };
 
     const wsServer = ws.createServer(wsOptions, function (conn) {
@@ -196,7 +200,6 @@ module.exports.createServer = function (config) {
                                 log.error('ERR | WS | Unknown device ', data.deviceid);
                             } else {
                                 device.state = data.params.switch;
-                                device.conn = conn;
                                 device.rawMessageLastUpdate = data;
                                 device.rawMessageLastUpdate.timestamp = Date.now();
                                 state.updateKnownDevice(device);
@@ -210,7 +213,6 @@ module.exports.createServer = function (config) {
                                 for (i = 0; i < data.params.switches.length; i++) {
                                     var device = state.getDeviceById(data.deviceid + '-' + i);
                                     device.state = data.params.switches[i].switch;
-                                    device.conn = conn;
                                     device.rawMessageLastUpdate = data;
                                     device.rawMessageLastUpdate.timestamp = Date.now();
                                     state.updateKnownDevice(device);
@@ -219,6 +221,11 @@ module.exports.createServer = function (config) {
                         }
                         break;
                     case 'register':
+                        var connection = {
+                            conn: conn,
+                            devices: []
+                        }
+
                         if (data.model == 'PSF-B04-GL') {
                             //register for devices appending the outlet to the deviceId
                             for (i = 0; i < 4; i++) {
@@ -229,31 +236,27 @@ module.exports.createServer = function (config) {
                                 };
                                 device.version = data.romVersion;
                                 device.model = data.model;
-                                device.conn = conn;
+                                device.connection = connection;
                                 device.rawMessageRegister = data;
                                 device.rawMessageRegister.timestamp = Date.now();
+                                connection.devices.push(device);
                                 state.updateKnownDevice(device);
                                 log.log('INFO | WS | Device %s registered', device.id);
                             }
-                            //Keep alive only once
-                            addConnectionIsAliveCheck(device);
+                            //All devices share connection
+                            addConnection(connection);
                         } else {
                             var device = {
                                 id: data.deviceid
                             };
 
-                            //this is not valid anymore?! type is not based on the first two chars
-                            var type = data.deviceid.substr(0, 2);
-                            if (type == '01') device.kind = 'switch';
-                            else if (type == '02') device.kind = 'light';
-                            else if (type == '03') device.kind = 'sensor'; //temperature and humidity. No timers here;
-
                             device.version = data.romVersion;
                             device.model = data.model;
-                            device.conn = conn;
+                            device.connection = connection;
                             device.rawMessageRegister = data;
                             device.rawMessageRegister.timestamp = Date.now();
-                            addConnectionIsAliveCheck(device);
+                            connection.devices.push(device);
+                            addConnection(connection);
                             state.updateKnownDevice(device);
                             log.log('INFO | WS | Device %s registered', device.id);
                         }
@@ -311,16 +314,16 @@ module.exports.createServer = function (config) {
             log.trace('RES | WS | DEV | ' + r);
             conn.sendText(r);
         });
-        conn.on("close", function (code, reason) {
-            log.log("Connection closed: (%s) (%d)", reason, code);
-            state.knownDevices.forEach((device, index) => {
-                if (device.conn != conn)
-                    return;
+       conn.on("close", function (code, reason) {
+            var connId = conn.socket.remoteAddress + ':'  + conn.socket.remotePort;
+            state.connections[connId].devices.forEach((device, index) => {
                 log.log("Device %s disconnected", device.id);
-                clearInterval(device.isAliveIntervalId);
                 callDeviceListeners(state.listeners.onDeviceDisconnectedListeners, device);
-                device.conn = undefined;
+                device.connnection = undefined;
             });
+
+            clearInterval(state.connections[connId].isAliveIntervalId);
+            delete state.connections[connId];
         });
         conn.on("error", function (error) {
             log.error("Connection error: ", error);
@@ -331,19 +334,20 @@ module.exports.createServer = function (config) {
         //currently all known devices are returned with a hint if they are currently connected
         getConnectedDevices: () => {
             return state.knownDevices.map(x => {
-                return { id: x.id, state: x.state, parentId: x.parentId, outlet: x.outlet, model: x.model, kind: x.kind, version: x.version, isConnected: (typeof x.conn !== 'undefined'), isAlive: x.isAlive, rawMessageRegister: x.rawMessageRegister, rawMessageLastUpdate: x.rawMessageLastUpdate }
+                return { id: x.id, state: x.state, parentId: x.parentId, outlet: x.outlet, model: x.model, kind: x.kind, version: x.version, isConnected: (typeof x.connection !== 'undefined'), isAlive: x.connection.isAlive, rawMessageRegister: x.rawMessageRegister, rawMessageLastUpdate: x.rawMessageLastUpdate }
             });
         },
 
         getDeviceState: (deviceId) => {
             var d = state.getDeviceById(deviceId);
-            if (!d || (typeof d.conn == 'undefined')) return "disconnected";
+
+            if (!d || (typeof d.connection == 'undefined')) return "disconnected";
             return d.state;
         },
 
         turnOnDevice: (deviceId) => {
             var d = state.getDeviceById(deviceId);
-            if (!d || (typeof d.conn == 'undefined')) return "disconnected";
+            if (!d || (typeof d.connection == 'undefined')) return "disconnected";
 
             if (typeof d.outlet == 'undefined') {
                 state.pushMessage({ action: 'update', value: { switch: "on" }, target: deviceId, device: deviceId });
@@ -356,7 +360,7 @@ module.exports.createServer = function (config) {
 
         turnOffDevice: (deviceId) => {
             var d = state.getDeviceById(deviceId);
-            if (!d || (typeof d.conn == 'undefined')) return "disconnected";
+            if (!d || (typeof d.connection == 'undefined')) return "disconnected";
 
             if (typeof d.outlet == 'undefined') {
                 state.pushMessage({ action: 'update', value: { switch: "off" }, target: deviceId, device: deviceId });
@@ -381,9 +385,21 @@ module.exports.createServer = function (config) {
 
         close: () => {
             log.log("Stopping server");
-            state.knownDevices.forEach(device => device.conn.close());
+            for(key in state.connections) {
+                var connection = state.connections[key];
+                connection.conn.socket.setTimeout(100, function() {
+                    if(connection) {
+                       connection.conn.socket.destroy();
+                    }
+                });
+
+                connection.conn.close();
+            }
+
             httpsServer.close();
-            wsServer.close();
+            wsServer.close(function () {
+                log.log('WS Server stopped');
+            });
             log.log("Stopped server");
         }
     }
