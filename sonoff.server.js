@@ -55,7 +55,7 @@ server.get('/devices/:deviceId/status', function (req, res) {
 });
 
 //switch the device
-server.get('/devices/:deviceId/:state', function (req, res) {
+server.get('/devices/:deviceId/:index/:state', function (req, res) {
     log.log('GET | %s | %s ', req.method, req.url);
     var d = devices.getDeviceState(req.params.deviceId);
 
@@ -66,12 +66,12 @@ server.get('/devices/:deviceId/:state', function (req, res) {
             case "1":
             case "ON":
                 res.sendStatus(200);
-                devices.turnOnDevice(req.params.deviceId);
+                devices.turnOnDevice(req.params.deviceId, req.params.index);
                 break;
             case "0":
             case "OFF":
                 res.sendStatus(200);
-                devices.turnOffDevice(req.params.deviceId);
+                devices.turnOffDevice(req.params.deviceId, req.params.index);
                 break;
             default:
                 res.status(404).send('Sonoff device ' + req.params.deviceId + ' can not be switched to "' + req.params.state + '", only "ON" and "OFF" are supported currently');
