@@ -1,4 +1,7 @@
 # Simple SONOFF Server
+
+**DISCONTINUED due to certification problems on newer firmwares. See [this issue](https://github.com/mdopp/simple-sonoff-server/issues/28) for details.**
+
 Current State => Not finished yet, but works most of the time.
 
 A lot of this code is based on the findings in this blog
