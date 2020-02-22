@@ -1,5 +1,5 @@
 module.exports.createServer = function (config) {
-    const CONNECTION_IS_ALIVE_CHECK_INTERVAL = 30000;
+    const CONNECTION_IS_ALIVE_CHECK_INTERVAL = 5000;
    
     const fs = require('fs');
     const path = require('path');
@@ -58,19 +58,33 @@ module.exports.createServer = function (config) {
         }
     }
 
+    function updateDevice(deviceId, index, switchState) {
+        var d = state.getDeviceById(deviceId);
+        if (!d || (typeof d.conn == 'undefined')) return "disconnected";
+
+        var dstate = d.state;
+
+        if(index > dstate.length - 1) return "not found";
+
+        dstate[index]['switch'] = (switchState ? "on" : "off");
+
+        state.pushMessage({ action: 'update', value: {switches : dstate}, target: deviceId });
+    }
+
     state.pushMessage = a => {
         var rq = {
             "apikey": "111111111-1111-1111-1111-111111111111",
+            "selfApikey" : "111111111-1111-1111-1111-111111111111",
             "action": a.action,
             "deviceid": a.target,
             "params": a.value,
             "userAgent": "app",
             "sequence": Date.now().toString(),
-            "ts": 0,
-            "from": "app"
+            // "ts": 0,
+            "userAgent": "app"
         };
         var r = JSON.stringify(rq);
-        log.trace('REQ | WS | APP | ' + r);
+        log.trace('>>> | WS | ' + r);
         var device = state.getDeviceById(a.target);
         if (!device.messages) device.messages = [];
         device.messages.push(rq);
@@ -121,8 +135,8 @@ module.exports.createServer = function (config) {
 
     // Register routes
     server.post('/dispatch/device', function (req, res) {
-        log.log('REQ | %s | %s ', req.method, req.url);
-        log.trace('REQ | %s', JSON.stringify(req.body));
+        log.log('<<< | HTTPS | %s ', req.url);
+        log.trace('DATA | %s', JSON.stringify(req.body));
         res.json({
             "error": 0,
             "reason": "ok",
@@ -151,7 +165,7 @@ module.exports.createServer = function (config) {
 
         conn.on("text", function (str) {
             var data = JSON.parse(str);
-            log.trace('REQ | WS | DEV | %s', JSON.stringify(data));
+            log.trace('<<< | WS | %s | %s', data.action, JSON.stringify(data));
             res = {
                 "error": 0,
                 "deviceid": data.deviceid,
@@ -186,7 +200,7 @@ module.exports.createServer = function (config) {
                         if (!device) {
                             log.error('ERR | WS | Unknown device ', data.deviceid);
                         } else {
-                            device.state = data.params.switch;
+                            device.state = data.params.switches;
                             device.conn = conn;
                             device.rawMessageLastUpdate = data;
                             device.rawMessageLastUpdate.timestamp = Date.now();
@@ -228,9 +242,15 @@ module.exports.createServer = function (config) {
                                 device.messages = device.messages.filter(function (item) {
                                     return item !== message;
                                 })
-                                device.state = message.params.switch;
-                                state.updateKnownDevice(device);
-                                log.trace('INFO | WS | APP | action has been accnowlaged by the device ' + JSON.stringify(data));
+
+                                device.isAlive = true;
+                                
+                                if(message.params.switches){
+                                    device.state = message.params.switches;
+                                    state.updateKnownDevice(device);
+                                }
+
+                                log.trace('INFO | WS | APP | action "'+message.action+'" has been accnowlaged by the device ' + JSON.stringify(data));
                             } else {
                                 log.error('ERR | WS | No message send, but received an anser', JSON.stringify(data));
                             }
@@ -243,7 +263,7 @@ module.exports.createServer = function (config) {
                 }
             }
             var r = JSON.stringify(res);
-            log.trace('RES | WS | DEV | ' + r);
+            log.trace('>>> | DEV | ' + r);
             conn.sendText(r);
         });
         conn.on("close", function (code, reason) {
@@ -272,21 +292,19 @@ module.exports.createServer = function (config) {
 
         getDeviceState: (deviceId) => {
             var d = state.getDeviceById(deviceId);
-            if (!d || (typeof d.conn == 'undefined')) return "disconnected";
+            if (!d || (typeof d.conn == 'undefined')) {
+                return "disconnected";
+            }
             return d.state;
         },
 
-        turnOnDevice: (deviceId) => {
-            var d = state.getDeviceById(deviceId);
-            if (!d || (typeof d.conn == 'undefined')) return "disconnected";
-            state.pushMessage({ action: 'update', value: { switch: "on" }, target: deviceId });
+        turnOnDevice: (deviceId, index) => {
+            updateDevice(deviceId, index, true);
             return "on";
         },
 
-        turnOffDevice: (deviceId) => {
-            var d = state.getDeviceById(deviceId);
-            if (!d || (typeof d.conn == 'undefined')) return "disconnected";
-            state.pushMessage({ action: 'update', value: { switch: "off" }, target: deviceId });
+        turnOffDevice: (deviceId, index) => {
+            updateDevice(deviceId, index, false);
             return "off";
         },
 
